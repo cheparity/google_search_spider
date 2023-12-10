@@ -5,7 +5,9 @@ __pycache__/
 
 # C extensions
 *.so
-
+data/
+!data/error_webs.txt
+!data/user_agents.txt
 # Distribution / packaging
 .Python
 build/

@@ -1,4 +1,4 @@
-import json
+import csv
 import logging
 import os
 import pickle
@@ -10,9 +10,16 @@ from selenium.webdriver.firefox.options import Options as FirefoxOptions
 
 
 class MyLogger:
-    def __init__(self, name, output_path, level=logging.DEBUG):
+    def __init__(self, name, output_path=None, level=logging.DEBUG):
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
+        output_path = output_path if output_path else f".data/log/{name}.log"
+        # 如果没有output_path的文件，则创建一个
+        if not os.path.exists(output_path):
+            output_dir = os.path.dirname(output_path)
+            os.makedirs(output_dir, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as fp:
+                fp.write("")
 
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
@@ -22,7 +29,7 @@ class MyLogger:
         self.logger.addHandler(file_handler)
 
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.INFO)  # console的level是info，存取文件的level是debug
         console_handler.setFormatter(formatter)
         self.logger.addHandler(console_handler)
 
@@ -40,6 +47,13 @@ class MyLogger:
 
     def critical(self, message):
         self.logger.critical(message)
+
+
+def save_as_csv(data, file_path):
+    # csv格式：[title, url]
+    with open(file_path, "a", encoding="utf-8") as output_result_file:
+        writer = csv.writer(output_result_file)
+        writer.writerow(data)
 
 
 def init_firefox_driver():
@@ -84,11 +98,6 @@ def get_data(file_path):
             if line:
                 text_list.append(line)
     return text_list
-
-
-def write_error_log(message, file_path="./data/log/error.txt"):
-    with open(file_path, "a") as file:
-        file.write(message + "\n")
 
 
 def save_cookies(driver, cookies_file_path):
@@ -155,12 +164,3 @@ def get_chrome_options(temp_dir="./temp"):
     chrome_options.add_argument("--incognito")
     # 禁用GPU加速，避免浏览器崩溃
     chrome_options.add_argument("--disable-gpu")
-
-
-def get_progress(init_progress_json, progress_path="./data/log/progress.txt"):
-    if os.path.exists(progress_path):
-        with open(progress_path, "r") as file:
-            progress = json.load(file)
-        return progress
-    else:
-        progress = init_progress_json  # must be json

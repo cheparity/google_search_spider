@@ -1,5 +1,5 @@
 import time
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, quote
 
 from bs4 import BeautifulSoup
 from selenium.common import NoSuchWindowException
@@ -17,11 +17,11 @@ URL_SEARCH = "https://{domain}/search?hl={language}&q={query}&btnG=Search&gbv=2"
 
 
 class GoogleSpider:
-
-    def __init__(self):
-
+    def __init__(self, question):
         self.driver = init_firefox_driver()
-
+        self.question = question
+        self.logger = MyLogger(name="GoogleSpider", output_path=f"./data/log/google_spider_"
+                                                                f"of_{quote(self.question)}.log")
         self.results_set = set()
         self.max_refresh_turn = 50
 
@@ -31,14 +31,14 @@ class GoogleSpider:
         try:
             last_height = self.driver.execute_script("return document.body.scrollHeight")
         except NoSuchWindowException:
-            print("浏览器意外关闭...")
+            self.logger.warning("浏览器意外关闭...")
             raise
 
         while scroll_count < max_scroll_count:
             try:
                 self.driver.execute_script("javascript:void(0);")
             except Exception as e:
-                print(f"检测页面状态时出错，尝试重新加载: {e}")
+                self.logger.warning(f"检测页面状态时出错，尝试重新加载: {e}")
                 self.driver.refresh()
                 time.sleep(5)
                 self.scroll_to_bottom()
@@ -50,7 +50,7 @@ class GoogleSpider:
                     "window.scrollTo(0, document.documentElement.scrollHeight);"
                 )
             except NoSuchWindowException:
-                print("关闭小窗时，浏览器意外关闭...")
+                self.logger.warning("关闭小窗时，浏览器意外关闭...")
                 raise
 
             time.sleep(scroll_pause_time)
@@ -59,7 +59,7 @@ class GoogleSpider:
                     "return document.documentElement.scrollHeight"
                 )
             except NoSuchWindowException:
-                print("页面向下滚动时，浏览器意外关闭...")
+                self.logger.warning("页面向下滚动时，浏览器意外关闭...")
                 raise
 
             if new_height == last_height:
@@ -67,27 +67,27 @@ class GoogleSpider:
 
             last_height = new_height
             scroll_count += 1
-            print(f"下滑滚动第{scroll_count}次 / 最大滚动{max_scroll_count}次")
+            self.logger.info(f"下滑滚动第{scroll_count}次 / 最大滚动{max_scroll_count}次")
 
     def check_card(self):
         try:
             card = self.driver.find_element(By.CSS_SELECTOR, ".card-section")
             info = card.text
-            print("找到卡片，信息为：", info)
+            self.logger.info(f"找到卡片，信息为：{info}")
             a = card.find_element(By.CSS_SELECTOR, "a")
             a.click()
-            print("点击卡片链接", a.get_attribute("href"))
+            self.logger.debug("点击卡片链接" + a.get_attribute("href"))
             time.sleep(5)
             return True
-        except Exception:
+        except Exception:  # 如果没有则return false
             return False
 
     def check_next_page_button(self):
         button = self.driver.find_element(By.CSS_SELECTOR, ".RVQdVd")
         if "More results" in button.text:
-            print("找到下一页按钮")
+            self.logger.info("找到下一页按钮")
             return True
-        print("未找到下一页按钮")
+        self.logger.info("未找到下一页按钮")
         return False
 
     def click_next_page_button(self):
@@ -97,64 +97,79 @@ class GoogleSpider:
             try:
                 self.driver.find_element(By.CSS_SELECTOR, ".GNJvt").click()
             except Exception as e:
-                print(f"点击下一页按钮出错: {e}")
+                self.logger.debug(f"点击下一页按钮出错: {e}")
+                save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
                 raise
 
     def get_result_from_soup(self):
         page = self.driver.page_source
         soup = BeautifulSoup(page, "html.parser")
-        for a in soup.find_all(name="a", attrs={"jsname": "UWckNb"}):  # a jsname="UWckNb"
-            print("解析到一个a标签")
+        all_divs = soup.find_all(name="a", attrs={"jsname": "UWckNb"})
+        self.logger.info(f"解析到{len(all_divs)}个a标签")
+        save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
+        for a in all_divs:  # a jsname="UWckNb"
+            self.logger.info("解析到一个a标签")
             try:
                 url = a["href"]
                 header = a.find("h3").text
-                ret = {
-                    "title": header,
-                    "url": url,
-                }
-                print("解析到一个结果", ret)
-                self.results_set.add(ret)
+                self.logger.info(f"解析到一个结果：{header}, {url}")
+                yield [header, url]
             except Exception as e:
-                print("解析出错: ", e)
+                self.logger.warning(f"解析出错: {e}")
+                save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
 
-    def scroll_and_scrap(self):
+    def scroll_and_click_next_btn(self):
+        max_try = 5
         while self.max_refresh_turn > 0:  # 一直滚
             try:
                 self.scroll_to_bottom(max_scroll_count=self.max_refresh_turn)
                 self.click_next_page_button()
                 self.max_refresh_turn -= 1
-            except Exception as e:
-                print("出现异常，尝试重新加载页面。加载完成后会继续执行", e)
-                self.max_refresh_turn -= 1
+            except Exception:
+                self.logger.info("元素未到位，尝试等待后重新滚动页面，进度已保存")
+                save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
+                if max_try <= 0:
+                    self.logger.warning("尝试次数过多，放弃本轮滚动")
+                    self.save_result()
+                    break
+                max_try -= 1
                 time.sleep(5)  # 停顿5s继续滚
                 continue
 
-    def run(self, question):
-        print("=====start to search=====")
-        question = quote_plus(question)
+    def save_result(self):
+        results = self.get_result_from_soup()
+        result_file_path = f"data/results_of_{quote(self.question)}.csv"
+        for result in results:
+            if tuple(result) not in self.results_set:
+                self.results_set.add(tuple(result))
+                save_as_csv(result, file_path=result_file_path)  # 保存结果
+        self.logger.info(f"共解析到{len(self.results_set)}个结果，已经存入文件{result_file_path}")
+
+    def run(self):
+        self.logger.info("=====start to search=====")
         url_2_search = URL_SEARCH.format(
             domain=get_random_domain(),
             language="en",
-            query=question,
+            query=quote_plus(self.question),
         )
-        print("url: ", url_2_search)
+        self.logger.info("url: " + url_2_search)
         self.driver.get(url_2_search)
         # 如果跳转到了验证页面，手动验证
         if "consent.google" in self.driver.current_url:
-            print("跳转到了验证页面，手动验证")
+            self.logger.info("跳转到了验证页面，手动验证")
             input("请登录，登录成功跳转后，按回车键继续...")
             self.driver.get(url_2_search)
 
         # page = self.driver.page_source
-        print("=====start to catch results in page=====")
-        self.scroll_and_scrap()
-        print("解析结束，共解析到", len(self.results_set), "个结果")
-        with open(f"data/result_of_{question}.txt", "a", encoding="utf-8") as output_result_file:
-            for result in self.results_set:
-                output_result_file.write(json.dumps(result, ensure_ascii=False) + "\n")
-        print("=====end to catch results in page=====")
+        self.logger.info("=====start to catch results in page=====")
+        self.scroll_and_click_next_btn()
+        self.logger.info(f"滚动结束，保存进度：当前页面的url: {self.driver.current_url}")
+        save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}")
+        self.save_result()
+        self.logger.info("=====end to catch results in page=====")
+        self.driver.quit()
         return self.results_set
 
 
 if __name__ == '__main__':
-    result_set = GoogleSpider().run("China modernization")
+    result_set = GoogleSpider("China modernization").run()
