@@ -1,10 +1,12 @@
 import time
 from urllib.parse import quote_plus, quote
-from selenium.webdriver.support import expected_conditions as EC
+
 from bs4 import BeautifulSoup
 from selenium.common import NoSuchWindowException
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+
 from tools import *
 
 UA_LIST = get_data(file_path="meta/user_agents.txt")
@@ -168,7 +170,7 @@ class GoogleSpider:
         self.logger.info("=====start to catch results in page=====")
         self.scroll_and_click_next_btn()
         self.logger.info(f"滚动结束，保存进度：当前页面的url: {self.driver.current_url}")
-        save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}")
+        save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
         self.save_result()
         self.logger.info("=====end to catch results in page=====")
         self.driver.quit()
@@ -176,4 +178,6 @@ class GoogleSpider:
 
 
 if __name__ == '__main__':
-    result_set = GoogleSpider("China modernization").run()
+    # GoogleSpider("China modernization").run()
+    # GoogleSpider("Chinese style modernization").run()
+    GoogleSpider("Chinese path to modernization").run()
