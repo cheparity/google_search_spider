@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 # C extensions
+*.zip
 *.so
 data/
 !data/error_webs.txt

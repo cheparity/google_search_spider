@@ -1,13 +1,13 @@
 import time
 from urllib.parse import quote_plus, quote
-
+from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
 from selenium.common import NoSuchWindowException
 from selenium.webdriver.common.by import By
-
+from selenium.webdriver.support.ui import WebDriverWait
 from tools import *
 
-UA_LIST = get_data(file_path="data/user_agents.txt")
+UA_LIST = get_data(file_path="meta/user_agents.txt")
 URL_LINK_XPATH = ("/html/body/div[5]/div/div[12]/div/div[2]/div[2]/div/div/div[{number}]/div/div/div["
                   "1]/div/div/span/a")
 H3_LINK_XPATH = ("/html/body/div[5]/div/div[12]/div/div[2]/div[2]/div/div/div[{number}]/div/div/div["
@@ -23,10 +23,11 @@ class GoogleSpider:
         self.logger = MyLogger(name="GoogleSpider", output_path=f"./data/log/google_spider_"
                                                                 f"of_{quote(self.question)}.log")
         self.results_set = set()
-        self.max_refresh_turn = 50
+        self.max_refresh_turn = 1000
 
     def scroll_to_bottom(self, scroll_pause_time=1, max_scroll_count=20):
         scroll_count = 0
+        time.sleep(scroll_pause_time)
 
         try:
             last_height = self.driver.execute_script("return document.body.scrollHeight")
@@ -42,7 +43,6 @@ class GoogleSpider:
                 self.driver.refresh()
                 time.sleep(5)
                 self.scroll_to_bottom()
-                time.sleep(scroll_pause_time)
                 raise
 
             try:
@@ -95,7 +95,10 @@ class GoogleSpider:
             return False
         if self.check_next_page_button():
             try:
-                self.driver.find_element(By.CSS_SELECTOR, ".GNJvt").click()
+                wait = WebDriverWait(self.driver, 10)
+                element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".GNJvt")))
+                element.click()
+                # self.driver.find_element(By.CSS_SELECTOR, ".GNJvt").click()
             except Exception as e:
                 self.logger.debug(f"点击下一页按钮出错: {e}")
                 save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
@@ -119,21 +122,22 @@ class GoogleSpider:
                 save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
 
     def scroll_and_click_next_btn(self):
-        max_try = 5
+        max_try = 10
         while self.max_refresh_turn > 0:  # 一直滚
             try:
                 self.scroll_to_bottom(max_scroll_count=self.max_refresh_turn)
                 self.click_next_page_button()
                 self.max_refresh_turn -= 1
-            except Exception:
-                self.logger.info("元素未到位，尝试等待后重新滚动页面，进度已保存")
+            except Exception as e:
+                self.logger.info(f"元素未到位，尝试等待后重新滚动页面，进度已保存. try = {max_try}")
+                self.logger.warning(f" exception: {e}")
                 save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
                 if max_try <= 0:
                     self.logger.warning("尝试次数过多，放弃本轮滚动")
                     self.save_result()
                     break
                 max_try -= 1
-                time.sleep(5)  # 停顿5s继续滚
+                time.sleep(3)  # 停顿3s继续滚
                 continue
 
     def save_result(self):

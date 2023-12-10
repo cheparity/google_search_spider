@@ -76,7 +76,7 @@ def get_random_user_agent(ua_list):
 
 
 def get_random_domain():
-    domain_list = get_data("data/all_domain.txt")
+    domain_list = get_data("meta/all_domain.txt")
     BLACK_DOMAIN = ["www.google.gf", "www.google.io", "www.google.com.lc"]
     domain = random.choice(domain_list)
     if domain in BLACK_DOMAIN:
