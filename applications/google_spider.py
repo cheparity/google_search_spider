@@ -20,6 +20,8 @@ URL_SEARCH = "https://{domain}/search?hl={language}&q={query}&btnG=Search&gbv=2"
 
 class GoogleSpider:
     def __init__(self, question):
+        # todo Please replace the browser you want to use
+        # self.driver = init_chrome_driver()
         self.driver = init_firefox_driver()
         self.question = question
         self.logger = MyLogger(name="GoogleSpider", output_path=f"./data/log/google_spider_"
@@ -32,16 +34,18 @@ class GoogleSpider:
         time.sleep(scroll_pause_time)
 
         try:
-            last_height = self.driver.execute_script("return document.body.scrollHeight")
+            last_height = self.driver.execute_script(
+                "return document.body.scrollHeight")
         except NoSuchWindowException:
-            self.logger.warning("浏览器意外关闭...")
+            self.logger.warning("Browser closes unexpectedly...")
             raise
 
         while scroll_count < max_scroll_count:
             try:
                 self.driver.execute_script("javascript:void(0);")
             except Exception as e:
-                self.logger.warning(f"检测页面状态时出错，尝试重新加载: {e}")
+                self.logger.warning(
+                    f"An error occurred while checking the page status, try reloading:{e}")
                 self.driver.refresh()
                 time.sleep(5)
                 self.scroll_to_bottom()
@@ -52,7 +56,8 @@ class GoogleSpider:
                     "window.scrollTo(0, document.documentElement.scrollHeight);"
                 )
             except NoSuchWindowException:
-                self.logger.warning("关闭小窗时，浏览器意外关闭...")
+                self.logger.warning(
+                    "Browser closes unexpectedly when closing the window...")
                 raise
 
             time.sleep(scroll_pause_time)
@@ -61,7 +66,8 @@ class GoogleSpider:
                     "return document.documentElement.scrollHeight"
                 )
             except NoSuchWindowException:
-                self.logger.warning("页面向下滚动时，浏览器意外关闭...")
+                self.logger.warning(
+                    "Browser closes unexpectedly when scroll down the page...")
                 raise
 
             if new_height == last_height:
@@ -69,27 +75,28 @@ class GoogleSpider:
 
             last_height = new_height
             scroll_count += 1
-            self.logger.info(f"下滑滚动第{scroll_count}次 / 最大滚动{max_scroll_count}次")
+            self.logger.info(
+                f"Scroll down {scroll_count} times / Maximum scroll {max_scroll_count} times")
 
     def check_card(self):
         try:
             card = self.driver.find_element(By.CSS_SELECTOR, ".card-section")
             info = card.text
-            self.logger.info(f"找到卡片，信息为：{info}")
+            self.logger.info(f"Find card: {info}")
             a = card.find_element(By.CSS_SELECTOR, "a")
             a.click()
-            self.logger.debug("点击卡片链接" + a.get_attribute("href"))
+            self.logger.debug("Click the card's url" + a.get_attribute("href"))
             time.sleep(5)
             return True
-        except Exception:  # 如果没有则return false
+        except Exception:
             return False
 
     def check_next_page_button(self):
         button = self.driver.find_element(By.CSS_SELECTOR, ".RVQdVd")
         if "More results" in button.text:
-            self.logger.info("找到下一页按钮")
+            self.logger.info("Found next-page button")
             return True
-        self.logger.info("未找到下一页按钮")
+        self.logger.info("Not found next-page button")
         return False
 
     def click_next_page_button(self):
@@ -98,48 +105,56 @@ class GoogleSpider:
         if self.check_next_page_button():
             try:
                 wait = WebDriverWait(self.driver, 10)
-                element = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".GNJvt")))
+                element = wait.until(EC.element_to_be_clickable(
+                    (By.CSS_SELECTOR, ".GNJvt")))
                 element.click()
                 # self.driver.find_element(By.CSS_SELECTOR, ".GNJvt").click()
             except Exception as e:
-                self.logger.debug(f"点击下一页按钮出错: {e}")
-                save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
+                self.logger.debug(
+                    f"Error when clicking the next-page button: {e}")
+                save_as_csv([self.driver.current_url],
+                            file_path=f"data/progress_of_{quote(self.question)}.csv")
                 raise
 
     def get_result_from_soup(self):
         page = self.driver.page_source
         soup = BeautifulSoup(page, "html.parser")
         all_divs = soup.find_all(name="a", attrs={"jsname": "UWckNb"})
-        self.logger.info(f"解析到{len(all_divs)}个a标签")
-        save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
+        self.logger.info(f"Got {len(all_divs)} a-divs")
+        save_as_csv([self.driver.current_url],
+                    file_path=f"data/progress_of_{quote(self.question)}.csv")
         for a in all_divs:  # a jsname="UWckNb"
-            self.logger.info("解析到一个a标签")
+            self.logger.info("Got one a-div")
             try:
                 url = a["href"]
                 header = a.find("h3").text
-                self.logger.info(f"解析到一个结果：{header}, {url}")
+                self.logger.info(f"Got one result{header}, {url}")
                 yield [header, url]
             except Exception as e:
-                self.logger.warning(f"解析出错: {e}")
-                save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
+                self.logger.warning(f"Error occured when parsing divs: {e}")
+                save_as_csv([self.driver.current_url],
+                            file_path=f"data/progress_of_{quote(self.question)}.csv")
 
     def scroll_and_click_next_btn(self):
         max_try = 10
-        while self.max_refresh_turn > 0:  # 一直滚
+        while self.max_refresh_turn > 0:  # Continue to scroll down until the maximum number of scrolls is reached
             try:
                 self.scroll_to_bottom(max_scroll_count=self.max_refresh_turn)
                 self.click_next_page_button()
                 self.max_refresh_turn -= 1
             except Exception as e:
-                self.logger.info(f"元素未到位，尝试等待后重新滚动页面，进度已保存. try = {max_try}")
+                self.logger.info(
+                    f"The element is not in place. Try to wait and re-scroll the page. The progress has been saved. try = {max_try}")
                 self.logger.warning(f" exception: {e}")
-                save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
+                save_as_csv([self.driver.current_url],
+                            file_path=f"data/progress_of_{quote(self.question)}.csv")
                 if max_try <= 0:
-                    self.logger.warning("尝试次数过多，放弃本轮滚动")
+                    self.logger.warning(
+                        "Too many attempts, give up this round of scrolling")
                     self.save_result()
                     break
                 max_try -= 1
-                time.sleep(3)  # 停顿3s继续滚
+                time.sleep(3)
                 continue
 
     def save_result(self):
@@ -148,8 +163,9 @@ class GoogleSpider:
         for result in results:
             if tuple(result) not in self.results_set:
                 self.results_set.add(tuple(result))
-                save_as_csv(result, file_path=result_file_path)  # 保存结果
-        self.logger.info(f"共解析到{len(self.results_set)}个结果，已经存入文件{result_file_path}")
+                save_as_csv(result, file_path=result_file_path)  # save result
+        self.logger.info(
+            f"A total of {len(self.results_set)} results have been parsed and have been stored in the file {result_file_path}")
 
     def run(self):
         self.logger.info("=====start to search=====")
@@ -160,17 +176,20 @@ class GoogleSpider:
         )
         self.logger.info("url: " + url_2_search)
         self.driver.get(url_2_search)
-        # 如果跳转到了验证页面，手动验证
+        # if jumped to the verification page, manually verify
         if "consent.google" in self.driver.current_url:
-            self.logger.info("跳转到了验证页面，手动验证")
-            input("请登录，登录成功跳转后，按回车键继续...")
+            self.logger.info(
+                "Jumped to the verification page, manually verify please")
+            input("Please login and press Enter to continue.")
             self.driver.get(url_2_search)
 
         # page = self.driver.page_source
         self.logger.info("=====start to catch results in page=====")
         self.scroll_and_click_next_btn()
-        self.logger.info(f"滚动结束，保存进度：当前页面的url: {self.driver.current_url}")
-        save_as_csv([self.driver.current_url], file_path=f"data/progress_of_{quote(self.question)}.csv")
+        self.logger.info(
+            f"The scroll ends and the progress is saved: URL of the current page: {self.driver.current_url}")
+        save_as_csv([self.driver.current_url],
+                    file_path=f"data/progress_of_{quote(self.question)}.csv")
         self.save_result()
         self.logger.info("=====end to catch results in page=====")
         self.driver.quit()
@@ -178,6 +197,5 @@ class GoogleSpider:
 
 
 if __name__ == '__main__':
-    # GoogleSpider("China modernization").run()
-    # GoogleSpider("Chinese style modernization").run()
-    GoogleSpider("Chinese path to modernization").run()
+    # todo Please replace the question you want to search
+    GoogleSpider(question="The Question you want to search").run()

@@ -14,14 +14,14 @@ class MyLogger:
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
         output_path = output_path if output_path else f".data/log/{name}.log"
-        # 如果没有output_path的文件，则创建一个
         if not os.path.exists(output_path):
             output_dir = os.path.dirname(output_path)
             os.makedirs(output_dir, exist_ok=True)
             with open(output_path, "w", encoding="utf-8") as fp:
                 fp.write("")
 
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
         file_handler = logging.FileHandler(output_path)
         file_handler.setLevel(level)
@@ -29,7 +29,8 @@ class MyLogger:
         self.logger.addHandler(file_handler)
 
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)  # console的level是info，存取文件的level是debug
+        # console的level是info，存取文件的level是debug
+        console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(formatter)
         self.logger.addHandler(console_handler)
 
@@ -69,6 +70,21 @@ def init_firefox_driver():
     options.add_argument("--disable-popup-blocking")
     options.add_argument("--disable-save-password-bubble")
     return webdriver.Firefox(options=options)
+
+
+def init_chrome_driver():
+    chrome_options = ChromeOptions()
+    chrome_options.add_argument("--disable-plugins-discovery")
+    chrome_options.add_argument("--mute-audio")
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-plugins-discovery")
+    chrome_options.add_argument("--mute-audio")
+    chrome_options.add_experimental_option(
+        "prefs", {"profile.managed_default_content_settings.images": 2}
+    )
+    chrome_options.add_argument("--incognito")
+    chrome_options.add_argument("--disable-gpu")
+    return webdriver.Chrome(chrome_options=chrome_options)
 
 
 def get_random_user_agent(ua_list):
@@ -116,7 +132,7 @@ def load_cookies(driver, cookies_file_path):
 
 
 def manual_login(driver, cookies_file):
-    input("请登录，登录成功跳转后，按回车键继续...")
+    input("Please loging and press Enter to continue...")
     save_cookies(driver, cookies_file)  # save cookies
     print("程序正在继续运行")
 
@@ -150,17 +166,14 @@ def get_options(options, temp_dir="./temp"):
 
 def get_chrome_options(temp_dir="./temp"):
     chrome_options = ChromeOptions()
-    # 将Chrome的缓存目录设置为刚刚创建的临时目录
     chrome_options.add_argument(f"--user-data-dir={temp_dir}")
     chrome_options.add_argument("--disable-plugins-discovery")
     chrome_options.add_argument("--mute-audio")
-    # 开启无头模式，禁用视频、音频、图片加载，开启无痕模式，减少内存占用
-    chrome_options.add_argument("--headless")  # 开启无头模式以节省内存占用，较低版本的浏览器可能不支持这一功能
+    chrome_options.add_argument("--headless")
     chrome_options.add_argument("--disable-plugins-discovery")
     chrome_options.add_argument("--mute-audio")
     chrome_options.add_experimental_option(
         "prefs", {"profile.managed_default_content_settings.images": 2}
     )
     chrome_options.add_argument("--incognito")
-    # 禁用GPU加速，避免浏览器崩溃
     chrome_options.add_argument("--disable-gpu")
