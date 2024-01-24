@@ -8,6 +8,7 @@ It runs well on my/my friends/my parents' compluter. Also runs well on my Linux 
 
 ## Quick Start
 
+0. Create a new data folder, at the same level as the application folder. Or you may meet strange errors.
 1. Replace `todo` in `google_spider.py` as your **quesion** and then run it. You will see a Firefox/Chrome launched. 
    1. It will scroll over and over again automatically until reaches the max results count of Google (about 500).
    2. It will then spider all results into `data/` folder. Note that it just contains [webtitle, weburl] of all results as `results_of_<your qeustion>.csv`. It also logs the progress in `data/progress_*.csv`.
